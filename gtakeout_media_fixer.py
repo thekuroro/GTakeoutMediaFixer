@@ -12,6 +12,8 @@ piexif_codecs = [k.lower() for k in ['.TIF', '.TIFF', '.JPEG', '.JPG']]
 
 class GTakeoutMediaFixer:
     def __init__(self):
+        self._nb_media_to_fix = 0
+        self._nb_media_fixed = 0
         self._error_ctr = 0
         self._window = None
         self._root_path = Path()
@@ -40,6 +42,7 @@ class GTakeoutMediaFixer:
             elif event == "Match":
                 self._root_path = Path(values["-IN2-"])
                 self._edited_word = values['-INPUT_TEXT-']
+                self._conversion_path(self._root_path, dry_run=True)
                 self._conversion_path(self._root_path)
             elif event == "Help":
                 sg.Popup("", "Media edited with the integrated editor of google photos "
@@ -75,47 +78,59 @@ class GTakeoutMediaFixer:
             image_file.write(exif_image.get_file())
 
     def _fix_file(self, file: Path):
-        if file.suffix.lower() == '.json':  # Check if file is a JSON
-            with open(file, encoding="utf8") as f:  # Load JSON into a var
-                data = json.load(f)
+        with open(file, encoding="utf8") as f:  # Load JSON into a var
+            data = json.load(f)
 
-            # SEARCH MEDIA ASSOCIATED TO JSON
-            original_title = data['title']  # Store metadata into vars
+        # SEARCH MEDIA ASSOCIATED TO JSON
+        original_title = data['title']  # Store metadata into vars
 
-            if '.' in original_title:
-                try:
-                    media = file.parent / Path(original_title)
-                except Exception as e:
-                    print(f"File {original_title} doesn't match any file")
-                    self._error_ctr += 1
-                    return
-            else:
-                print(f"File {file} is not a media associated json, removing")
-                file.unlink()
+        if '.' in original_title:
+            try:
+                media = file.parent / Path(file.stem)
+            except Exception as e:
+                print(f"File {original_title} doesn't match any file")
+                self._error_ctr += 1
                 return
-
-            # METADATA EDITION
-            time_stamp = int(data['photoTakenTime']['timestamp'])  # Get creation time
-            print(media)
-
-            if media.suffix.lower() in piexif_codecs:  # If file support EXIF data
-                self._set_exif(media, data, time_stamp)
-
-                # Correct file creation and modification date
-                setctime(media, time_stamp)  # Set Windows file creation time
-                date = datetime.fromtimestamp(time_stamp)
-                mod_time = time.mktime(date.timetuple())
-                os.utime(media, (mod_time, mod_time))  # Set Windows file modification time
-
-            # All good remove json file
+        else:
+            print(f"File {file} is not a media associated json, removing")
             file.unlink()
+            return
 
-    def _conversion_path(self, path: Path):
+        # METADATA EDITION
+        time_stamp = int(data['photoTakenTime']['timestamp'])  # Get creation time
+        print(media)
+
+        if media.suffix.lower() in piexif_codecs:  # If file support EXIF data
+            self._set_exif(media, data, time_stamp)
+
+            # Correct file creation and modification date
+            setctime(media, time_stamp)  # Set Windows file creation time
+            date = datetime.fromtimestamp(time_stamp)
+            mod_time = time.mktime(date.timetuple())
+            os.utime(media, (mod_time, mod_time))  # Set Windows file modification time
+
+        # Restore original filename
+        if original_title != media.name:
+            print(f'Renaming {media.name} to {original_title}')
+            media.rename(media.parent / original_title)
+
+        # All good remove json file
+        file.unlink()
+
+    def _conversion_path(self, path: Path, dry_run: bool = False):
         if path.is_dir():
             for obj in path.iterdir():
-                self._conversion_path(path=obj)
+                self._conversion_path(path=obj, dry_run=dry_run)
         else:
-            self._fix_file(file=path)
+            if path.suffix.lower() == '.json':  # Check if file is a JSON
+                if dry_run:
+                    self._nb_media_to_fix += 1
+                else:
+                    self._fix_file(file=path)
+                    progress = round(self._nb_media_fixed / self._nb_media_to_fix * 100, 2)
+                    self._window['-PROGRESS_LABEL-'].update(str(progress) + "%", visible=True)
+                    self._window['-PROGRESS_BAR-'].update(progress, visible=True)
+                    self._nb_media_fixed += 1
 
 
 if __name__ == "__main__":
