@@ -154,6 +154,14 @@ class GTakeoutMediaFixer:
 
                 for obj in path.iterdir():
                     self._conversion_path(path=obj, dry_run=dry_run)
+
+                if not any(path.iterdir()):
+                    # Remove empty dir
+                    self.log_event(f'Removing emtpy folder: {path.name}', WARNING)
+                    path.rmdir()
+
+
+
         else:
 
             if dry_run:
