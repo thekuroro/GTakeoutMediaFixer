@@ -1,14 +1,18 @@
 import json
 import os
 import time
+import logging
 import PySimpleGUI as sg
 from pathlib import Path
 from datetime import datetime
 from exif import Image
 from win32_setctime import setctime
 from src.helper import dd2dms
+from logging import INFO, WARNING, ERROR
+
 
 piexif_codecs = [k.lower() for k in ['.TIF', '.TIFF', '.JPEG', '.JPG']]
+log_level_color = {INFO: 'blue', WARNING: 'Orange', ERROR: 'red'}
 DRY_RUN = False
 
 
@@ -16,10 +20,10 @@ class GTakeoutMediaFixer:
     def __init__(self):
         self._nb_media_to_fix = 0
         self._nb_media_fixed = 0
-        self._error_ctr = 0
         self._window = None
         self._root_path = Path()
         self._edited_word = ''
+        self._logger = logging.getLogger('')
 
     def start(self):
         layout = [[sg.T("")],
@@ -32,7 +36,7 @@ class GTakeoutMediaFixer:
                   [sg.T("")],
                   [sg.Button("Fix")]]
 
-        self._window = sg.Window('Google Takeout Fixer', layout, icon='google_photos.ico', size=(600, 450))
+        self._window = sg.Window('Google Takeout Fixer', layout, icon='google_photos.ico', size=(605, 450))
         sg.cprint_set_output_destination(self._window, '-LOG-')
 
         while True:
@@ -42,14 +46,20 @@ class GTakeoutMediaFixer:
                 break
             elif event == "Fix":
                 self._root_path = Path(values["-IN2-"])
+                logging.basicConfig(filename=self._root_path / 'fix_info.log', encoding='utf-8', level=logging.INFO)
                 self._conversion_path(self._root_path, dry_run=True)
                 self._conversion_path(self._root_path)
                 self._window['-PROGRESS_LABEL-'].update('100%')
                 self._window['-PROGRESS_BAR-'].update(100)
                 self._window['-FOLDER-'].update('Working folder:')
-                sg.cprint(f'Fix complete !!!', c='green')
+                self.log_event('Fix complete !!!', WARNING)
 
-    def _set_exif(self, file, google_exif, time_stamp):
+    def log_event(self, msg, level):
+        self._logger.log(msg=msg, level=level)
+        sg.cprint(msg, c=log_level_color[level])
+
+    @staticmethod
+    def _set_exif(file, google_exif, time_stamp):
         lat = google_exif['geoData']['latitude']
         lng = google_exif['geoData']['longitude']
         altitude = google_exif['geoData']['altitude']
@@ -86,16 +96,15 @@ class GTakeoutMediaFixer:
             try:
                 media = file.parent / Path(file.stem)
             except Exception as e:
-                sg.cprint(f"File {original_title} doesn't match any file", c='red')
-                self._error_ctr += 1
+                self.log_event(f"File {original_title} doesn't match any file", ERROR)
                 return
         else:
-            print(f"File {file} is not a media associated json, removing")
+            self.log_event(f"File {file} is not a media associated json, removing", WARNING)
             file.unlink()
             return
 
         if DRY_RUN:
-            sg.cprint(f'Process element: {media.name}', c='blue')
+            self.log_event(f'Process element: {media.name}', INFO)
             return
 
         # METADATA EDITION
@@ -117,7 +126,7 @@ class GTakeoutMediaFixer:
                 print(f'Renaming {media.name} to {original_title}')
                 media.rename(media.parent / original_title)
             except:
-                sg.cprint(f'Fail to rename file: {media.name}', c='red')
+                self.log_event(f'Fail to rename file: {media.name}', ERROR)
 
         # All good remove json file
         file.unlink()
