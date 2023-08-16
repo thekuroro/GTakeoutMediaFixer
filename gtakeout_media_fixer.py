@@ -32,7 +32,7 @@ class GTakeoutMediaFixer:
                   [sg.T("")],
                   [sg.Button("Fix")]]
 
-        self._window = sg.Window('Google Takeout Fixer', layout, icon='photos.ico', size=(600, 450))
+        self._window = sg.Window('Google Takeout Fixer', layout, icon='google_photos.ico', size=(600, 450))
         sg.cprint_set_output_destination(self._window, '-LOG-')
 
         while True:
