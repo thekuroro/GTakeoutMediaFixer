@@ -4,7 +4,7 @@ import platform
 import shutil
 import time
 import logging
-import PySimpleGUI as sg
+import PySimpleGUI as Sg
 from pathlib import Path
 from datetime import datetime
 from exif import Image
@@ -27,23 +27,23 @@ class GTakeoutMediaFixer:
         self._logger = logging.getLogger('')
 
     def start(self):
-        layout = [[sg.T("")],
-                  [sg.Text("Choose a folder: ")],
-                  [sg.Input(key="-IN2-", change_submits=True, size=(72, 0)), sg.FolderBrowse(key="-IN-")],
-                  [sg.T("")],
-                  [sg.Text('Working folder:', key='-FOLDER-')],
-                  [sg.ProgressBar(100, size=(48, 3),  orientation='h', border_width=4, key='-PROGRESS_BAR-'), sg.T("0%", key='-PROGRESS_LABEL-')],
-                  [sg.Multiline(size=(180, 12), key='-LOG-', autoscroll=True)],
-                  [sg.T("")],
-                  [sg.Button("Fix")]]
+        layout = [[Sg.T("")],
+                  [Sg.Text("Choose a folder: ")],
+                  [Sg.Input(key="-IN2-", change_submits=True, size=(72, 0)), Sg.FolderBrowse(key="-IN-")],
+                  [Sg.T("")],
+                  [Sg.Text('Working folder:', key='-FOLDER-')],
+                  [Sg.ProgressBar(100, size=(48, 3), orientation='h', border_width=4, key='-PROGRESS_BAR-'), Sg.T("0%", key='-PROGRESS_LABEL-')],
+                  [Sg.Multiline(size=(180, 12), key='-LOG-', autoscroll=True)],
+                  [Sg.T("")],
+                  [Sg.Button("Fix")]]
 
-        self._window = sg.Window('Google Takeout Fixer', layout, icon='google_photos.ico', size=(605, 450))
-        sg.cprint_set_output_destination(self._window, '-LOG-')
+        self._window = Sg.Window('Google Takeout Fixer', layout, icon='google_photos.ico', size=(605, 450))
+        Sg.cprint_set_output_destination(self._window, '-LOG-')
 
         while True:
             event, values = self._window.read()
 
-            if event == sg.WIN_CLOSED or event == "Exit":
+            if event == Sg.WIN_CLOSED or event == "Exit":
                 break
             elif event == "Fix":
                 self._root_path = Path(values["-IN2-"])
@@ -59,7 +59,7 @@ class GTakeoutMediaFixer:
     def log_event(self, msg, level, color: str = ''):
         self._logger.log(msg=msg, level=level)
         print_color = color if color else log_level_color[level]
-        sg.cprint(msg, c=print_color)
+        Sg.cprint(msg, c=print_color)
 
     def _handle_duplicate(self, file: Path):
 
@@ -73,9 +73,6 @@ class GTakeoutMediaFixer:
 
     @staticmethod
     def _set_exif(file, google_exif, time_stamp):
-        lat = google_exif['geoData']['latitude']
-        lng = google_exif['geoData']['longitude']
-        altitude = google_exif['geoData']['altitude']
         time_stamp = time_stamp
 
         # Add Exif data
@@ -96,7 +93,7 @@ class GTakeoutMediaFixer:
                 image_file.write(exif_image.get_file())
 
         except:
-            sg.cprint(f"Failed to modify EXIF: {file.name}", c='red')
+            Sg.cprint(f"Failed to modify EXIF: {file.name}", c='red')
 
     def _fix_file(self, file: Path):
         with open(file, encoding="utf8") as f:  # Load JSON into a var
@@ -111,7 +108,7 @@ class GTakeoutMediaFixer:
         if '.' in original_title:
             try:
                 media = file.parent / Path(file.stem)
-            except Exception as e:
+            except Exception:
                 self.log_event(f"File {original_title} doesn't match any file", ERROR)
                 return
         else:
@@ -159,8 +156,6 @@ class GTakeoutMediaFixer:
                     # Remove empty dir
                     self.log_event(f'Removing emtpy folder: {path.name}', WARNING)
                     path.rmdir()
-
-
 
         else:
 
