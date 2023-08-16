@@ -12,5 +12,5 @@ this program add the missing metadata and delete the json file
 1. Download your _Google_ media from [Takeout](https://takeout.google.com/)
 2. Install the requirement: ```pip install -r requirements.txt```
 3. Start the scrip ```python gtakeout_media_fixer.py```
-4. Select the folder in which images/videos along with its JSONs were downloaded ('Photos from 20xx' for example)
+4. Select the folder in which images/videos along with its JSONs were downloaded ('Google Photos' for example)
 5. Click on _Fix_ button
