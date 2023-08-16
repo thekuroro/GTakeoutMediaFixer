@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import time
 import logging
 import PySimpleGUI as sg
@@ -13,7 +14,6 @@ from logging import INFO, WARNING, ERROR
 
 piexif_codecs = [k.lower() for k in ['.TIF', '.TIFF', '.JPEG', '.JPG']]
 log_level_color = {INFO: 'blue', WARNING: 'Orange', ERROR: 'red'}
-DRY_RUN = False
 
 
 class GTakeoutMediaFixer:
@@ -22,6 +22,7 @@ class GTakeoutMediaFixer:
         self._nb_media_fixed = 0
         self._window = None
         self._root_path = Path()
+        self._duplicates_path = Path()
         self._edited_word = ''
         self._logger = logging.getLogger('')
 
@@ -46,17 +47,29 @@ class GTakeoutMediaFixer:
                 break
             elif event == "Fix":
                 self._root_path = Path(values["-IN2-"])
-                logging.basicConfig(filename=self._root_path / 'fix_info.log', encoding='utf-8', level=logging.INFO)
+                self._duplicates_path = self._root_path.parent / 'duplicates'
+                logging.basicConfig(filename=self._root_path.parent / 'fix_info.log', encoding='utf-8', level=logging.INFO)
                 self._conversion_path(self._root_path, dry_run=True)
                 self._conversion_path(self._root_path)
                 self._window['-PROGRESS_LABEL-'].update('100%')
                 self._window['-PROGRESS_BAR-'].update(100)
                 self._window['-FOLDER-'].update('Working folder:')
-                self.log_event('Fix complete !!!', WARNING)
+                self.log_event('Fix complete !!!', WARNING, color='green')
 
-    def log_event(self, msg, level):
+    def log_event(self, msg, level, color: str = ''):
         self._logger.log(msg=msg, level=level)
-        sg.cprint(msg, c=log_level_color[level])
+        print_color = color if color else log_level_color[level]
+        sg.cprint(msg, c=print_color)
+
+    def _handle_duplicate(self, file: Path):
+
+        full_suffixes = "".join(file.suffixes)
+        file_name = file.name.replace(full_suffixes, '')
+
+        if (file_name[-1] == ')' and file_name[-2].isdecimal()) or '(' in full_suffixes:
+            self._duplicates_path.mkdir(exist_ok=True)
+            self.log_event(f'Moving duplicate: {file.name}', WARNING)
+            shutil.move(file, self._duplicates_path / file.name)
 
     @staticmethod
     def _set_exif(file, google_exif, time_stamp):
@@ -89,6 +102,9 @@ class GTakeoutMediaFixer:
         with open(file, encoding="utf8") as f:  # Load JSON into a var
             data = json.load(f)
 
+        if 'title' not in data:
+            return
+
         # SEARCH MEDIA ASSOCIATED TO JSON
         original_title = data['title']  # Store metadata into vars
 
@@ -103,13 +119,8 @@ class GTakeoutMediaFixer:
             file.unlink()
             return
 
-        if DRY_RUN:
-            self.log_event(f'Process element: {media.name}', INFO)
-            return
-
         # METADATA EDITION
         time_stamp = int(data['photoTakenTime']['timestamp'])  # Get creation time
-        print(media)
 
         if media.suffix.lower() in piexif_codecs:  # If file support EXIF data
             self._set_exif(media, data, time_stamp)
@@ -123,28 +134,35 @@ class GTakeoutMediaFixer:
         # Restore original filename
         if original_title != media.name:
             try:
-                print(f'Renaming {media.name} to {original_title}')
+                self.log_event(f'Renaming {media.name} to {original_title}', INFO)
                 media.rename(media.parent / original_title)
+                file.unlink()
             except:
                 self.log_event(f'Fail to rename file: {media.name}', ERROR)
 
-        # All good remove json file
-        file.unlink()
+        else:
+            # All good remove json file
+            file.unlink()
 
     def _conversion_path(self, path: Path, dry_run: bool = False):
         if path.is_dir():
-            if not dry_run:
-                self._window['-FOLDER-'].update(value=f'Working folder: {path.stem}')
+            if path != self._duplicates_path:
+                if not dry_run:
+                    self._window['-FOLDER-'].update(value=f'Working folder: {path.stem}')
 
-            for obj in path.iterdir():
-                self._conversion_path(path=obj, dry_run=dry_run)
+                for obj in path.iterdir():
+                    self._conversion_path(path=obj, dry_run=dry_run)
         else:
+
+            if dry_run:
+                self._handle_duplicate(file=path)
+
             if path.suffix.lower() == '.json':  # Check if file is a JSON
                 if dry_run:
                     self._nb_media_to_fix += 1
                 else:
                     self._fix_file(file=path)
-                    progress = round(self._nb_media_fixed / self._nb_media_to_fix * 100, 2)
+                    progress = int(round(self._nb_media_fixed / self._nb_media_to_fix * 100, 2))
                     self._window['-PROGRESS_LABEL-'].update(str(progress) + "%")
                     self._window['-PROGRESS_BAR-'].update(progress)
                     self._nb_media_fixed += 1
