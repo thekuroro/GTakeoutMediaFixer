@@ -8,6 +8,7 @@ from exif import Image
 from win32_setctime import setctime
 
 piexif_codecs = [k.lower() for k in ['.TIF', '.TIFF', '.JPEG', '.JPG']]
+DRY_RUN = False
 
 
 class GTakeoutMediaFixer:
@@ -21,18 +22,17 @@ class GTakeoutMediaFixer:
 
     def start(self):
         layout = [[sg.T("")],
-                  [sg.Text('Enter suffix used for edited photos (optional):')],
-                  [sg.InputText(key='-INPUT_TEXT-'), sg.ReadFormButton('Help')],
-                  [sg.T("")],
                   [sg.Text("Choose a folder: ")],
                   [sg.Input(key="-IN2-", change_submits=True), sg.FolderBrowse(key="-IN-")],
                   [sg.T("")],
-                  [sg.Button("Match")],
+                  [sg.Text('Working folder:', key='-FOLDER-')],
+                  [sg.ProgressBar(100, size=(30, 2),  orientation='h', border_width=4, key='-PROGRESS_BAR-'), sg.T("0%", key='-PROGRESS_LABEL-')],
+                  [sg.Multiline(size=(50, 12), key='-LOG-', autoscroll=True)],
                   [sg.T("")],
-                  [sg.ProgressBar(100, visible=False, orientation='h', border_width=4, key='-PROGRESS_BAR-')],
-                  [sg.T("", key='-PROGRESS_LABEL-')]]
+                  [sg.Button("Match")]]
 
-        self._window = sg.Window('Google Photos Matcher', layout, icon='photos.ico')
+        self._window = sg.Window('Google Takeout Fixer', layout, icon='photos.ico')
+        sg.cprint_set_output_destination(self._window, '-LOG-')
 
         while True:
             event, values = self._window.read()
@@ -41,17 +41,12 @@ class GTakeoutMediaFixer:
                 break
             elif event == "Match":
                 self._root_path = Path(values["-IN2-"])
-                self._edited_word = values['-INPUT_TEXT-']
                 self._conversion_path(self._root_path, dry_run=True)
                 self._conversion_path(self._root_path)
-            elif event == "Help":
-                sg.Popup("", "Media edited with the integrated editor of google photos "
-                             "will download both the original image 'Example.jpg' and the edited version 'Example-edited.jpg'.",
-                             "",
-                             "The 'edited' suffix changes depending on the language.",
-                             "",
-                             "If you leave this box blank default spanish suffix will be used to search for edited photos.",
-                             "", title="Information", icon='photos.ico')
+                self._window['-PROGRESS_LABEL-'].update('100%')
+                self._window['-PROGRESS_BAR-'].update(100)
+                self._window['-FOLDER-'].update('Working folder:')
+                sg.cprint(f'Fix complete !!!', c='green')
 
     def _set_exif(self, file, data, time_stamp):
         lat = data['geoData']['latitude']
@@ -88,12 +83,16 @@ class GTakeoutMediaFixer:
             try:
                 media = file.parent / Path(file.stem)
             except Exception as e:
-                print(f"File {original_title} doesn't match any file")
+                sg.cprint(f"File {original_title} doesn't match any file", c='red')
                 self._error_ctr += 1
                 return
         else:
             print(f"File {file} is not a media associated json, removing")
             file.unlink()
+            return
+
+        if DRY_RUN:
+            sg.cprint(f'Process element: {media.name}', c='blue')
             return
 
         # METADATA EDITION
@@ -119,6 +118,9 @@ class GTakeoutMediaFixer:
 
     def _conversion_path(self, path: Path, dry_run: bool = False):
         if path.is_dir():
+            if not dry_run:
+                self._window['-FOLDER-'].update(value=f'Working folder: {path.stem}')
+
             for obj in path.iterdir():
                 self._conversion_path(path=obj, dry_run=dry_run)
         else:
@@ -128,8 +130,8 @@ class GTakeoutMediaFixer:
                 else:
                     self._fix_file(file=path)
                     progress = round(self._nb_media_fixed / self._nb_media_to_fix * 100, 2)
-                    self._window['-PROGRESS_LABEL-'].update(str(progress) + "%", visible=True)
-                    self._window['-PROGRESS_BAR-'].update(progress, visible=True)
+                    self._window['-PROGRESS_LABEL-'].update(str(progress) + "%")
+                    self._window['-PROGRESS_BAR-'].update(progress)
                     self._nb_media_fixed += 1
 
 
