@@ -1,5 +1,6 @@
 import json
 import os
+import platform
 import shutil
 import time
 import logging
@@ -7,7 +8,6 @@ import PySimpleGUI as sg
 from pathlib import Path
 from datetime import datetime
 from exif import Image
-from win32_setctime import setctime
 from src.helper import dd2dms
 from logging import INFO, WARNING, ERROR
 
@@ -119,17 +119,19 @@ class GTakeoutMediaFixer:
             file.unlink()
             return
 
-        # METADATA EDITION
+        # EXIF data edition
         time_stamp = int(data['photoTakenTime']['timestamp'])  # Get creation time
 
         if media.suffix.lower() in piexif_codecs:  # If file support EXIF data
             self._set_exif(media, data, time_stamp)
 
-            # Correct file creation and modification date
-            setctime(media, time_stamp)  # Set Windows file creation time
-            date = datetime.fromtimestamp(time_stamp)
-            mod_time = time.mktime(date.timetuple())
-            os.utime(media, (mod_time, mod_time))  # Set Windows file modification time
+        # Correct file creation and modification date
+        if platform.system() == "Windows":
+            from win32_setctime import setctime
+            setctime(media, time_stamp)  # Set file creation time (Windows only)
+        date = datetime.fromtimestamp(time_stamp)
+        mod_time = time.mktime(date.timetuple())
+        os.utime(media, (mod_time, mod_time))  # Set file modification time
 
         # Restore original filename
         if original_title != media.name:
