@@ -106,9 +106,8 @@ class GTakeoutMediaFixer:
         original_title = data['title']  # Store metadata into vars
 
         if '.' in original_title:
-            try:
-                media = file.parent / Path(file.stem)
-            except Exception:
+            media = file.parent / Path(file.stem)
+            if not media.exists():
                 self.log_event(f"File {original_title} doesn't match any file", ERROR)
                 return
         else:
