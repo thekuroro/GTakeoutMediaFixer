@@ -47,7 +47,7 @@ class GTakeoutMediaFixer:
                 break
             elif event == "Fix":
                 self._root_path = Path(values["-IN2-"])
-                self._duplicates_path = self._root_path / '**DUPLICATES**'
+                self._duplicates_path = self._root_path / '--DUPLICATES--'
                 logging.basicConfig(filename=self._root_path / 'fix_info.log', encoding='utf-8', level=logging.INFO)
                 self._conversion_path(self._root_path, dry_run=True)
                 self._conversion_path(self._root_path)
