@@ -7,6 +7,9 @@ Python script to fix the media from Google takeout (date, GPS info ...), inspire
 Media downloaded from google takeout are striped from there EXIF metadata, such as (GPS coordinate, ...), those metadata are stored in matching json files, 
 this program add the missing metadata and delete the json file
 
+## What it does
+This script will process all the files in the specified path, the duplicated file will be moved to the --DUPLICATES-- folder, once proceeded the json file containing the missing data will be removed, leaving you only with picture
+
 ## Usage
 
 1. Download your _Google_ media from [Takeout](https://takeout.google.com/)
