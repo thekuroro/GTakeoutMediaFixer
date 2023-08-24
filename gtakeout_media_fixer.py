@@ -27,6 +27,9 @@ class GTakeoutMediaFixer:
         self._logger = logging.getLogger('')
 
     def start(self):
+        """
+            Display UI
+        """
         layout = [[Sg.T("")],
                   [Sg.Text("Choose a folder: ")],
                   [Sg.Input(key="-IN2-", change_submits=True, size=(72, 0)), Sg.FolderBrowse(key="-IN-")],
@@ -49,8 +52,9 @@ class GTakeoutMediaFixer:
                 self._root_path = Path(values["-IN2-"])
                 self._duplicates_path = self._root_path / '--DUPLICATES--'
                 logging.basicConfig(filename=self._root_path / 'fix_info.log', encoding='utf-8', level=logging.INFO)
-                self._conversion_path(self._root_path, dry_run=True)
-                self._conversion_path(self._root_path)
+
+                self._count_total_files(self._root_path)
+                self._conversion_recurse(self._root_path)
                 self._window['-PROGRESS_LABEL-'].update('100%')
                 self._window['-PROGRESS_BAR-'].update(100)
                 self._window['-FOLDER-'].update('Working folder:')
@@ -61,21 +65,24 @@ class GTakeoutMediaFixer:
         print_color = color if color else log_level_color[level]
         Sg.cprint(msg, c=print_color)
 
-    def _handle_duplicate(self, file: Path):
-
+    @staticmethod
+    def _is_file_duplicate(file: Path) -> bool:
+        """
+            Return true if the file is a duplicate
+        """
         full_suffixes = "".join(file.suffixes)
         file_name = file.name.replace(full_suffixes, '')
 
         if (file_name[-1] == ')' and file_name[-2].isdecimal()) or '(' in full_suffixes:
-            self._duplicates_path.mkdir(exist_ok=True)
-            self.log_event(f'Moving duplicate: {file.name}', WARNING)
-            shutil.move(file, self._duplicates_path / file.name)
+            return True
+        else:
+            return False
 
     @staticmethod
-    def _set_exif(file, google_exif, time_stamp):
-        time_stamp = time_stamp
-
-        # Add Exif data
+    def _set_exif(file, google_exif: dict, time_stamp):
+        """
+            Add the missing EXIF data
+        """
         try:
             with open(file, 'rb') as image_file:
                 date_time = datetime.fromtimestamp(time_stamp).strftime("%Y:%m:%d %H:%M:%S")  # Create date object
@@ -96,6 +103,9 @@ class GTakeoutMediaFixer:
             Sg.cprint(f"Failed to modify EXIF: {file.name}", c='red')
 
     def _fix_file(self, file: Path):
+        """
+            Fix the file (EXIF data + creation/modification date)
+        """
         with open(file, encoding="utf8") as f:  # Load JSON into a var
             data = json.load(f)
 
@@ -142,34 +152,47 @@ class GTakeoutMediaFixer:
             # All good remove json file
             file.unlink()
 
-    def _conversion_path(self, path: Path, dry_run: bool = False):
+    def _count_total_files(self, path: Path):
+        """
+            Count the total number of files to fix
+        """
+        if path.is_dir():
+            for obj in path.iterdir():
+                self._count_total_files(path=obj)
+        else:
+            if path.suffix.lower() == '.json':  # Check if file is a JSON
+                self._nb_media_to_fix += 1
+
+    def _conversion_recurse(self, path: Path):
+        """
+            Recurse if path is a folder, if path is a file process it
+        """
         if path.is_dir():
             if path != self._duplicates_path:
-                if not dry_run:
-                    self._window['-FOLDER-'].update(value=f'Working folder: {path.stem}')
+                self._window['-FOLDER-'].update(value=f'Working folder: {path.stem}')
 
                 for obj in path.iterdir():
-                    self._conversion_path(path=obj, dry_run=dry_run)
+                    self._conversion_recurse(path=obj)
 
                 if not any(path.iterdir()):
                     # Remove empty dir
                     self.log_event(f'Removing emtpy folder: {path.name}', WARNING)
                     path.rmdir()
-
         else:
-
-            if dry_run:
-                self._handle_duplicate(file=path)
-
-            if path.suffix.lower() == '.json':  # Check if file is a JSON
-                if dry_run:
-                    self._nb_media_to_fix += 1
-                else:
+            if self._is_file_duplicate(file=path):
+                # Moving file if it's a duplicate
+                self._duplicates_path.mkdir(exist_ok=True)
+                self.log_event(f'Moving duplicate: {path.name}', WARNING)
+                shutil.move(path, self._duplicates_path / path.name)
+                self._nb_media_fixed += 1
+            else:
+                if path.suffix.lower() == '.json':  # Check if file is a JSON
                     self._fix_file(file=path)
-                    progress = int(round(self._nb_media_fixed / self._nb_media_to_fix * 100, 2))
-                    self._window['-PROGRESS_LABEL-'].update(str(progress) + "%")
-                    self._window['-PROGRESS_BAR-'].update(progress)
                     self._nb_media_fixed += 1
+
+            progress = int(round(self._nb_media_fixed / self._nb_media_to_fix * 100, 2))
+            self._window['-PROGRESS_LABEL-'].update(str(progress) + "%")
+            self._window['-PROGRESS_BAR-'].update(progress)
 
 
 if __name__ == "__main__":
