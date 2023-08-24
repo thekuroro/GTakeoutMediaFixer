@@ -1,0 +1,5 @@
+PySimpleGUI==4.60.5
+exif==1.6.0
+
+if platform.system() == 'Windows':
+    win32-setctime==1.1.0
